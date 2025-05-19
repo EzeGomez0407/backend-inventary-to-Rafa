@@ -182,7 +182,7 @@ router.post('/post-herramienta', async (req, res) => {
         .insert([
           {
             herramienta_id: data.id,
-            obra_actual_id: obra || 'c3e3f700-753c-44aa-b52c-fdd6de105b75',
+            obra_actual_id: obra || '3adb3433-24c5-4022-ae5a-0dadfec27a30',
             cantidad: cantidad_total,
             fecha,
             hora
