@@ -15,46 +15,39 @@ router.get('/herramientas', async (req, res) => {
 router.get('/obras', async (req, res) => {
 
   try {
-    const { data: works, error: errWork } = await supabase
-      .from('obras')
-      .select('*');
-  
-    if (errWork) throw errWork
-
-    const worksFormated = await Promise.all(
-      works.map(async (work)=>{
-
-        const {data: toolInWork} = await supabase
-        .from('herramientas_en_obras')
-        .select('herramienta_id, cantidad')
-        .eq('obra_actual_id', work.id)
-        
-        const toolsInWorkFormated = await Promise.all(
-          toolInWork.map(async (tool)=>{
-
-            const {data: single_tool} = await supabase
-              .from('herramientas')
-              .select('nombre')
-              .eq('id', tool.herramienta_id)
-              .single()
-            
-            return {
-              herramienta_id: tool.herramienta_id,
-              cantidad: tool.cantidad,
-              nombre: single_tool.nombre
-            }  
-          })
+    const { data, error: errWork } = await supabase
+      .from('obras').select(`
+        *,
+        herramientas_en_obras (
+          cantidad,
+          herramientas (
+            nombre,
+            id
+          )
         )
+      `);
+      // Ordenamos las props con sus respectivos nombres 
+      // para las herramientas dentro de cada obra
+      const works = data.map(work=>{
+
+        const toolsInWork = work.herramientas_en_obras.map(tool=>{
+          return {
+            cantidad: tool.cantidad,
+            herramienta_id: tool.herramientas.id,
+            nombre: tool.herramientas.nombre
+          }
+        })
 
         return {
-          ...work,
-          herramientas_enObra: toolsInWorkFormated
+          id: work.id,
+          nombre: work.nombre,
+          direccion: work.direccion,
+          herramientas_enObra: toolsInWork
         }
-        
       })
-    )
-    
-    return res.json(worksFormated)
+      
+    if (errWork) throw errWork
+    return res.json(works)
     
   } catch (error) {
     console.log(error);
