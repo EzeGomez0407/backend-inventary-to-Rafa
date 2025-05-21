@@ -58,46 +58,49 @@ router.get('/obras', async (req, res) => {
 
 router.get('/history', async (req, res) => {
 
+  
   try {
-    const { data: historyList, error } = await supabase
+    const { data, error } = await supabase
       .from('herramientas_en_obras')
-      .select('*');
+      .select(`*,
+        herramientas(
+          id,
+          nombre,
+          marca,
+          estado,
+          cantidad_total,
+          medidas,
+          observacion
+        ),
+        obra_actual_id(
+          id,nombre,direccion
+        ),
+        obra_anterior_id(
+          id,nombre,direccion
+        )
+        `);
 
     if (error) throw error;
-      
-    const historyListFormated = await Promise.all(
-      historyList.map(async (register)=>{
-        const {data: tool} = await supabase
-          .from('herramientas')
-          .select('*')
-          .eq('id', register.herramienta_id)
-          .single()
-          
-        const {data: previusWork} = await supabase
-          .from('obras')
-          .select('*')
-          .eq('id', register.obra_anterior_id)
-          .single()
 
-        const {data: currentrWork} = await supabase
-          .from('obras')
-          .select('*')
-          .eq('id', register.obra_actual_id)
-          .single()
-
-          return {
-            id_register: register.id,
-            tool,
-            previusWork,
-            currentrWork,
-            cantidad: register.cantidad,
-            fecha: register.fecha,
-            hora: register.hora
-          }
-          
-        }))
+    const historyList = data.map(register=>{
+      return {
+        id_register: register.id,
+        tool:{
+          ...register.herramientas
+        },
+        previusWork:{
+          ...register.obra_anterior_id
+        },
+        currentrWork:{
+          ...register.obra_actual_id
+        },
+        cantidad: register.cantidad,
+        fecha: register.fecha,
+        hora: register.hora
+      }
+    })
         
-    res.json(historyListFormated);
+    res.json(historyList);
 
     } catch (error) {
       if (error) return res.status(500).json({ error });
