@@ -99,38 +99,6 @@ router.get('/history', async (req, res) => {
         hora: register.hora
       }
     })
-      
-    /* const historyListFormated = await Promise.all(
-      historyList.map(async (register)=>{
-        const {data: tool} = await supabase
-          .from('herramientas')
-          .select('*')
-          .eq('id', register.herramienta_id)
-          .single()
-          
-        const {data: previusWork} = await supabase
-          .from('obras')
-          .select('*')
-          .eq('id', register.obra_anterior_id)
-          .single()
-
-        const {data: currentrWork} = await supabase
-          .from('obras')
-          .select('*')
-          .eq('id', register.obra_actual_id)
-          .single()
-
-          return {
-            id_register: register.id,
-            tool,
-            previusWork,
-            currentrWork,
-            cantidad: register.cantidad,
-            fecha: register.fecha,
-            hora: register.hora
-          }
-          
-        })) */
         
     res.json(historyList);
 
