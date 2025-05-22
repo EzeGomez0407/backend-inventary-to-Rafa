@@ -15,20 +15,29 @@ router.get('/herramientas', async (req, res) => {
 router.get('/obras', async (req, res) => {
 
   try {
-    const { data, error: errWork } = await supabase
-      .from('obras').select(`
-        *,
-        herramientas_en_obras (
-          cantidad,
-          herramientas (
-            nombre,
-            id
-          )
-        )
-      `);
+    const { data: listWorks, error: errWork } = await supabase
+      .from('obras')
+      .select(`
+    *,
+    herramientas_en_obras!herramientas_en_obras_obra_actual_id_fkey (
+      id,
+      cantidad,
+      herramienta_id,
+      herramientas (
+        id,
+        nombre,
+        marca,
+        estado,
+        cantidad_total,
+        medidas,
+        observacion
+      )
+    )
+  `);
+      
       // Ordenamos las props con sus respectivos nombres 
       // para las herramientas dentro de cada obra
-      const works = data.map(work=>{
+      const works = listWorks.map(work=>{
 
         const toolsInWork = work.herramientas_en_obras.map(tool=>{
           return {
