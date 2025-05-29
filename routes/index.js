@@ -15,13 +15,46 @@ router.get('/herramientas', async (req, res) => {
 router.get('/obras', async (req, res) => {
 
   try {
-    const { data: works, error: errWork } = await supabase
-      .from('obras')
-      .select('*');
-  
+    const { data, error: errWork } = await supabase
+      .from('obras').select(`
+    *,
+    herramientas_en_obras!herramientas_en_obras_obra_actual_id_fkey (
+      id,
+      cantidad,
+      herramienta_id,
+      herramientas (
+        id,
+        nombre,
+        marca,
+        estado,
+        cantidad_total,
+        medidas,
+        observacion
+      )
+    )
+  `);
+
+      const works = data.map(work=>{
+
+        const toolsInWork = work.herramientas_en_obras.map(tool=>{
+          return {
+            cantidad: tool.cantidad,
+            herramienta_id: tool.herramientas.id,
+            nombre: tool.herramientas.nombre
+          }
+        })
+
+        return {
+          id: work.id,
+          nombre: work.nombre,
+          direccion: work.direccion,
+          herramientas_enObra: toolsInWork
+        }
+      })
+      
     if (errWork) throw errWork
 
-    const worksFormated = await Promise.all(
+   /*  const worksFormated = await Promise.all(
       works.map(async (work)=>{
 
         const {data: toolInWork} = await supabase
@@ -44,7 +77,7 @@ router.get('/obras', async (req, res) => {
               nombre: single_tool.nombre
             }  
           })
-        )
+        ) 
 
         return {
           ...work,
@@ -53,8 +86,8 @@ router.get('/obras', async (req, res) => {
         
       })
     )
-    
-    return res.json(worksFormated)
+    */
+    return res.json(works)
     
   } catch (error) {
     console.log(error);
@@ -66,45 +99,48 @@ router.get('/obras', async (req, res) => {
 router.get('/history', async (req, res) => {
 
   try {
-    const { data: historyList, error } = await supabase
+    const { data, error } = await supabase
       .from('herramientas_en_obras')
-      .select('*');
+      .select(`*,
+        herramientas(
+          id,
+          nombre,
+          marca,
+          estado,
+          cantidad_total,
+          medidas,
+          observacion
+        ),
+        obra_actual_id(
+          id,nombre,direccion
+        ),
+        obra_anterior_id(
+          id,nombre,direccion
+        )
+        `);
 
     if (error) throw error;
+
+    const historyList = data.map(register=>{
+      return {
+        id_register: register.id,
+        tool:{
+          ...register.herramientas
+        },
+        previusWork:{
+          ...register.obra_anterior_id
+        },
+        currentrWork:{
+          ...register.obra_actual_id
+        },
+        cantidad: register.cantidad,
+        fecha: register.fecha,
+        hora: register.hora
+      }
+    })
       
-    const historyListFormated = await Promise.all(
-      historyList.map(async (register)=>{
-        const {data: tool} = await supabase
-          .from('herramientas')
-          .select('*')
-          .eq('id', register.herramienta_id)
-          .single()
-          
-        const {data: previusWork} = await supabase
-          .from('obras')
-          .select('*')
-          .eq('id', register.obra_anterior_id)
-          .single()
-
-        const {data: currentrWork} = await supabase
-          .from('obras')
-          .select('*')
-          .eq('id', register.obra_actual_id)
-          .single()
-
-          return {
-            id_register: register.id,
-            tool,
-            previusWork,
-            currentrWork,
-            cantidad: register.cantidad,
-            fecha: register.fecha,
-            hora: register.hora
-          }
-          
-        }))
         
-    res.json(historyListFormated);
+    res.json(historyList);
 
     } catch (error) {
       if (error) return res.status(500).json({ error });
@@ -366,5 +402,81 @@ router.post('/move-tool', async (req, res) => {
   return res.status(200).json({ success: true });
 });
 
+router.delete('/delete-work', async(req,res)=>{
+  const {id} = req.body;
+  
+  try {
+    const {error} = await supabase
+      .from('obras')
+      .delete()
+      .eq('id', id)
+
+    if(error) throw error;
+
+      return res.status(200).json({data: `obra con id ${id} eliminada`})
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json(error)
+    
+  }
+})
+
+router.put('/update-work', async(req,res)=>{
+  const {nombre, direccion, id} = req.body;
+  
+  if(!id) return res.status(400).json({error: 'Falta el id para identificar la obra'});
+
+  if(nombre || direccion){
+      try {
+        if(nombre && direccion){
+          const {data, error} = await supabase
+            .from('obras')
+            .update({
+              nombre,
+              direccion
+            })
+            .eq('id', id)
+            .select()
+            .single()
+          
+            if(error) throw error
+    
+            return res.status(200).json(data)
+        }else if(nombre){
+          const {data, error} = await supabase
+            .from('obras')
+            .update({
+              nombre
+            })
+            .eq('id', id)
+            .select()
+            .single()
+          
+            if(error) throw error
+    
+            return res.status(200).json(data)
+        }else{
+          const {data, error} = await supabase
+            .from('obras')
+            .update({
+              direccion
+            })
+            .eq('id', id)
+            .select()
+            .single()
+          
+            if(error) throw error
+    
+            return res.status(200).json(data)
+        }
+      } catch (error) {
+        console.log(error);
+        return res.status(500).json(error)
+        
+      }
+    }
+    return res.status(400).json({error: 'No se especifico la propiedad para actualizar'})
+    
+  })
 
 module.exports = router;
