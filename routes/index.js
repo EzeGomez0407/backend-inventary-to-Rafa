@@ -372,4 +372,81 @@ router.post('/move-tool', async (req, res) => {
 });
 
 
+router.delete('/delete-work', async(req,res)=>{
+  const {id} = req.body;
+  
+  try {
+    const {error} = await supabase
+      .from('obras')
+      .delete()
+      .eq('id', id)
+
+    if(error) throw error;
+
+      return res.status(200).json({data: `obra con id ${id} eliminada`})
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json(error)
+    
+  }
+})
+
+router.put('/update-work', async(req,res)=>{
+  const {nombre, direccion, id} = req.body;
+  
+  if(!id) return res.status(400).json({error: 'Falta el id para identificar la obra'});
+
+  if(nombre || direccion){
+      try {
+        if(nombre && direccion){
+          const {data, error} = await supabase
+            .from('obras')
+            .update({
+              nombre,
+              direccion
+            })
+            .eq('id', id)
+            .select()
+            .single()
+          
+            if(error) throw error
+    
+            return res.status(200).json(data)
+        }else if(nombre){
+          const {data, error} = await supabase
+            .from('obras')
+            .update({
+              nombre
+            })
+            .eq('id', id)
+            .select()
+            .single()
+          
+            if(error) throw error
+    
+            return res.status(200).json(data)
+        }else{
+          const {data, error} = await supabase
+            .from('obras')
+            .update({
+              direccion
+            })
+            .eq('id', id)
+            .select()
+            .single()
+          
+            if(error) throw error
+    
+            return res.status(200).json(data)
+        }
+      } catch (error) {
+        console.log(error);
+        return res.status(500).json(error)
+        
+      }
+    }
+    return res.status(400).json({error: 'No se especifico la propiedad para actualizar'})
+    
+  })
+
 module.exports = router;
