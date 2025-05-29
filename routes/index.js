@@ -15,8 +15,14 @@ router.get('/herramientas', async (req, res) => {
 router.get('/obras', async (req, res) => {
 
   try {
+<<<<<<< HEAD
     const { data, error: errWork } = await supabase
       .from('obras').select(`
+=======
+    const { data: listWorks, error: errWork } = await supabase
+      .from('obras')
+      .select(`
+>>>>>>> 0c83609a70033dceb9ef1f0891a7cff25897e3ab
     *,
     herramientas_en_obras!herramientas_en_obras_obra_actual_id_fkey (
       id,
@@ -33,6 +39,7 @@ router.get('/obras', async (req, res) => {
       )
     )
   `);
+<<<<<<< HEAD
 
       const works = data.map(work=>{
 
@@ -78,15 +85,35 @@ router.get('/obras', async (req, res) => {
             }  
           })
         ) 
+=======
+      
+      // Ordenamos las props con sus respectivos nombres 
+      // para las herramientas dentro de cada obra
+      const works = listWorks.map(work=>{
+
+        const toolsInWork = work.herramientas_en_obras.map(tool=>{
+          return {
+            cantidad: tool.cantidad,
+            herramienta_id: tool.herramientas.id,
+            nombre: tool.herramientas.nombre
+          }
+        })
+>>>>>>> 0c83609a70033dceb9ef1f0891a7cff25897e3ab
 
         return {
-          ...work,
-          herramientas_enObra: toolsInWorkFormated
+          id: work.id,
+          nombre: work.nombre,
+          direccion: work.direccion,
+          herramientas_enObra: toolsInWork
         }
-        
       })
+<<<<<<< HEAD
     )
     */
+=======
+      
+    if (errWork) throw errWork
+>>>>>>> 0c83609a70033dceb9ef1f0891a7cff25897e3ab
     return res.json(works)
     
   } catch (error) {
@@ -98,6 +125,7 @@ router.get('/obras', async (req, res) => {
 
 router.get('/history', async (req, res) => {
 
+  
   try {
     const { data, error } = await supabase
       .from('herramientas_en_obras')
@@ -138,7 +166,10 @@ router.get('/history', async (req, res) => {
         hora: register.hora
       }
     })
+<<<<<<< HEAD
       
+=======
+>>>>>>> 0c83609a70033dceb9ef1f0891a7cff25897e3ab
         
     res.json(historyList);
 
@@ -218,7 +249,7 @@ router.post('/post-herramienta', async (req, res) => {
         .insert([
           {
             herramienta_id: data.id,
-            obra_actual_id: obra || '3adb3433-24c5-4022-ae5a-0dadfec27a30',
+            obra_actual_id: obra || '9966da54-bacb-4760-92a2-3d56d6c721b6',
             cantidad: cantidad_total,
             fecha,
             hora
