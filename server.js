@@ -10,7 +10,7 @@ app.use(express.json());
 const indexRoutes = require('./routes/index');
 app.use('/', indexRoutes);
 
-const PORT = process.env.PORT || 5750;
+const PORT = process.env.PORT || 5751;
 
 // Iniciar servidor
 app.listen(PORT, () => {
