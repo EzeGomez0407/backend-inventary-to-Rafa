@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const supabase = require('../supabaseClient.js');
+const getToolsInWork = require("../services/getToolsInWork.js");
+const deleteRegister = require('../services/deleteRegister.js');
+const deleteWork = require('../services/deleteWork.js');
 
 
 router.get('/herramientas', async (req, res) => {
@@ -371,23 +374,52 @@ router.post('/move-tool', async (req, res) => {
   return res.status(200).json({ success: true });
 });
 
-
 router.delete('/delete-work', async(req,res)=>{
   const {id} = req.body;
+  const mainStorage_ID = process.env.MAIN_STORAGE_ID
   
+  if(mainStorage_ID === id) return res.status(400).json({msg: "Esta obra no se puede eliminar porque es el almacenamiento principal"});
+
+  if(!id) return res.status(400).json({error: "Falta el id para buscar la obra"})
+
   try {
-    const {error} = await supabase
-      .from('obras')
-      .delete()
-      .eq('id', id)
+    // Obtenemos la lista de herramientas que hay en la obra a eliminar y despues en el almacenamiento principal.
+    const toolsInWorkToDelete = await getToolsInWork(id);
+    const toolsInMainStorage = await getToolsInWork(mainStorage_ID)
 
-    if(error) throw error;
+    // En esta lista vamos metiendo las herramientas
+    const listToolsFormated = []
 
-      return res.status(200).json({data: `obra con id ${id} eliminada`})
+    // Sumamos la cantidad de las herramientas que coinciden y las vamos guardando en el array
+    // No obstante las herramientas que no estan en el galpon se almacenan igual con la cantidad que
+    // había en la obra.
+    toolsInWorkToDelete.forEach(tool => {
+      const toolSaved = toolsInMainStorage.find(toolStorage => tool.herramienta_id == toolStorage.herramienta_id)
+      
+      if(toolSaved) {
+        return listToolsFormated.push({herramienta_id: tool.herramienta_id, cantidad: Number(tool.cantidad) + Number(toolSaved.cantidad), obra_actual_id: mainStorage_ID});
+      }
+      listToolsFormated.push({herramienta_id: tool.herramienta_id, cantidad: Number(tool.cantidad), obra_actual_id: mainStorage_ID})
+    });
+    
+    // Ahora hacemos un upsert a supabase para reemplazar e insertar los datos (las herramientas)
+    const {error:errUpsert, data} = await supabase
+      .from("herramientas_en_obras")
+      .upsert(listToolsFormated, {onConflict: ["herramienta_id", "obra_actual_id"]})
+      .select()
+
+      const {error: errDeletRegisters} = await deleteRegister(id)
+    
+
+    const {error: errDeleteWork} = await deleteWork(id)
+
+    if(errUpsert || errDeletRegisters || errDeleteWork) throw {errDeletRegisters,errDeleteWork,errUpsert};
+
+      return res.status(200).json({msg: "Obra eliminada", data})
+
   } catch (error) {
     console.log(error);
     return res.status(500).json(error)
-    
   }
 })
 
