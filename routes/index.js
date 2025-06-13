@@ -2,18 +2,41 @@ const express = require('express');
 const router = express.Router();
 const supabase = require('../supabaseClient.js');
 const getToolsInWork = require("../services/getToolsInWork.js");
-const deleteRegister = require('../services/deleteRegister.js');
+const {deleteRegistersForWork, deleteRegistersForTool_ID} = require('../services/deleteRegisters.js');
 const deleteWork = require('../services/deleteWork.js');
+const getTools = require('../services/getTools.js');
+const { deleteTool } = require('../services/deleteTool.js');
 
-
+// -----------RUTAS DE HERRAMIENTAS--------------------------
 router.get('/herramientas', async (req, res) => {
-  const { data, error } = await supabase
-    .from('herramientas')
-    .select('*');
-
-  if (error) return res.status(500).json({ error });
-  res.json(data);
+  try {
+    const {data: tools, error} = await getTools()
+   
+    if (error) throw error;
+    
+    res.json(tools);
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json(error)
+  }
 });
+// Ruta para eliminar una herramienta
+router.delete("/tool-delete/:id", async (req, res) => {
+  const {id: tool_id} = req.params
+  
+  try {
+    const {error: errDelRegisters} = await deleteRegistersForTool_ID(tool_id)
+    if(errDelRegisters) throw errDelRegisters
+
+    const {error: errDelTool} = await deleteTool(tool_id)
+    if(errDelTool) throw errDelTool
+
+    return res.status(200).json({data: "herramienta eliminada"})
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json(error)
+  }
+})
 
 router.get('/obras', async (req, res) => {
 
@@ -408,7 +431,7 @@ router.delete('/delete-work', async(req,res)=>{
       .upsert(listToolsFormated, {onConflict: ["herramienta_id", "obra_actual_id"]})
       .select()
 
-      const {error: errDeletRegisters} = await deleteRegister(id)
+      const {error: errDeletRegisters} = await deleteRegistersForWork(id)
     
 
     const {error: errDeleteWork} = await deleteWork(id)
