@@ -134,8 +134,10 @@ router.get('/history', async (req, res) => {
         hora: register.hora
       }
     })
-        
-    res.json(historyList);
+    
+    const historySortToDate = historyList.sort((A, B) => new Date(`${A.fecha} ${A.hora}`) - new Date(`${B.fecha} ${B.hora}`))
+
+    res.status(200).json(historySortToDate);
 
     } catch (error) {
       if (error) return res.status(500).json({ error });
