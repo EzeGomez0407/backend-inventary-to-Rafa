@@ -4,10 +4,12 @@ const supabase = require('../supabaseClient.js');
 const getToolsInWork = require("../services/getToolsInWork.js");
 const {deleteRegistersForWork, deleteRegistersForTool_ID} = require('../services/deleteRegisters.js');
 const deleteWork = require('../services/deleteWork.js');
-const getTools = require('../services/getTools.js');
+const {getTools, getToolByID} = require('../services/getTools.js');
 const { deleteTool } = require('../services/deleteTool.js');
+const { upsertToolInMainStorage, substractQuantityToolOfRegister } = require('../services/updateRegister.js');
 
 // -----------RUTAS DE HERRAMIENTAS--------------------------
+// Ruta para devolver las herramientas
 router.get('/herramientas', async (req, res) => {
   try {
     const {data: tools, error} = await getTools()
@@ -20,6 +22,7 @@ router.get('/herramientas', async (req, res) => {
     return res.status(500).json(error)
   }
 });
+
 // Ruta para eliminar una herramienta
 router.delete("/tool-delete/:id", async (req, res) => {
   const {id: tool_id} = req.params
@@ -38,6 +41,130 @@ router.delete("/tool-delete/:id", async (req, res) => {
   }
 })
 
+// Ruta para editar una herramienta
+router.put("/edit-tool/:id", async (req, res) => {
+  const {id} = req.params
+  const toolToEdit = req.body
+  const {operation, quantityValue} = toolToEdit.quantityToModify
+  const changePermited = ["nombre", "marca", "estado", "medidas", "observacion"]
+  const operationPermited = ["substract", "addition"]
+
+  
+  try {
+    // buscamos la herramienta de la DB
+    const {error, data: tool} = await getToolByID(id);
+    if(error) throw error
+
+    // comprobamos que la operacion de modificacion de cantidad sea correcta
+    if(operation !== undefined && !operationPermited.includes(operation)) throw new Error("La operacion que se quiere hacer no esta disponible");
+    
+    // sera la herramienta con los nuevos cambios
+    let toolEdited = {}
+
+
+    // Modificamos la cantidad de la herramienta si eso se quiere y según qué operación se quiera hacer
+    if(typeof quantityValue === 'number' && quantityValue > 0){
+
+      if(operation === operationPermited[0]){
+  
+        // nos aseguramos que si la herramienta esta en mas de una obra no se pueda restar la cantidad
+        if(tool.ubications.length > 1) return res.status(400).json({error: "No puedes restar cantidad si la herramienta se encuentra en más de una obra"});
+
+        toolEdited.cantidad_total = +(tool.cantidad_total - quantityValue)
+        
+        const {error} = await substractQuantityToolOfRegister(quantityValue, id, tool.ubications[0].register_id)
+
+        if(error) throw error
+      } 
+      else if(operation === operationPermited[1]){
+        
+        const {error} = await upsertToolInMainStorage(quantityValue, id)
+        toolEdited.cantidad_total = +(tool.cantidad_total + quantityValue)
+        if(error) throw error
+        
+      }
+    }
+
+    // reemplazamos los nuevos valores
+    for(const nameProperty of changePermited){
+      if(toolToEdit[nameProperty] !== undefined){
+        toolEdited[nameProperty] = toolToEdit[nameProperty]
+      }
+    }
+
+    const {error: errToolEdited, data: toolModificated} = await supabase
+      .from("herramientas")
+      .update(toolEdited)
+      .eq("id", id)
+      .select()
+      .single()
+
+    if(errToolEdited) throw errToolEdited
+
+    return res.status(200).json(toolModificated)
+
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({error: error.message})
+  }
+})
+
+// Ruta para agregar una herramienta
+router.post('/post-herramienta', async (req, res) => {
+  const { nombre, marca, estado, cantidad_total, medidas, observacion, obra} = req.body; // datos de la herramienta
+  const mainStorage_ID = process.env.MAIN_STORAGE_ID
+
+  // Verificamos que todos los campos sean proporcionados
+  if (!nombre || !marca || !estado || cantidad_total === undefined) {
+    return res.status(400).json({ error: 'Todos los campos son obligatorios' });
+  }
+
+  // Verificamos que el estado sea válido
+  if (!['bien', 'mal', 'mantenimiento'].includes(estado)) {
+    return res.status(400).json({ error: 'Estado inválido. Debe ser "bien", "mal" o "mantenimiento"' });
+  }
+
+  try {
+    // Insertamos la nueva herramienta en la base de datos
+    const { data, error } = await supabase
+      .from('herramientas')
+      .insert([
+        { nombre, marca, estado, cantidad_total, medidas, observacion }
+      ])
+      .select()
+      .single(); // para obtener una sola fila insertada
+      
+    if (error) {
+      throw error; // lanzamos un error si algo sale mal
+    }
+    
+    // Insertamos la herramienta en su respectiva Ubicacion
+    const now = new Date();
+    now.setHours(now.getHours() - 3);
+    const fecha = now.toISOString().split('T')[0];
+    const hora = now.toISOString().split('T')[1].split('.')[0];
+    
+    await supabase
+      .from('herramientas_en_obras')
+      .insert([
+        {
+          herramienta_id: data.id,
+          obra_actual_id: obra || mainStorage_ID,
+          cantidad: cantidad_total,
+          fecha,
+          hora
+        }
+      ]);
+    // Respondemos con el data creado
+    res.status(201).json({ message: 'Herramienta agregada con éxito', data });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: 'Hubo un problema al agregar la herramienta' });
+  }
+});
+
+
+// -----------------RUTAS DE OBRAS---------------------------------
 router.get('/obras', async (req, res) => {
 
   try {
@@ -175,59 +302,6 @@ router.post('/post-obra', async (req, res) => {
     res.status(500).json({ error: 'Hubo un problema al crear la obra' });
   }
 });
-
-// Ruta para agregar una herramienta
-router.post('/post-herramienta', async (req, res) => {
-    const { nombre, marca, estado, cantidad_total, medidas, observacion, obra} = req.body; // datos de la herramienta
-    
-    // Verificamos que todos los campos sean proporcionados
-    if (!nombre || !marca || !estado || cantidad_total === undefined) {
-      return res.status(400).json({ error: 'Todos los campos son obligatorios' });
-    }
-  
-    // Verificamos que el estado sea válido
-    if (!['bien', 'mal', 'mantenimiento'].includes(estado)) {
-      return res.status(400).json({ error: 'Estado inválido. Debe ser "bien", "mal" o "mantenimiento"' });
-    }
-  
-    try {
-      // Insertamos la nueva herramienta en la base de datos
-      const { data, error } = await supabase
-        .from('herramientas')
-        .insert([
-          { nombre, marca, estado, cantidad_total, medidas, observacion }
-        ])
-        .select()
-        .single(); // para obtener una sola fila insertada
-        
-      if (error) {
-        throw error; // lanzamos un error si algo sale mal
-      }
-      
-      // Insertamos la herramienta en su respectiva Ubicacion
-      const now = new Date();
-      now.setHours(now.getHours() - 3);
-      const fecha = now.toISOString().split('T')[0];
-      const hora = now.toISOString().split('T')[1].split('.')[0];
-      
-      await supabase
-        .from('herramientas_en_obras')
-        .insert([
-          {
-            herramienta_id: data.id,
-            obra_actual_id: obra || '9966da54-bacb-4760-92a2-3d56d6c721b6',
-            cantidad: cantidad_total,
-            fecha,
-            hora
-          }
-        ]);
-      // Respondemos con el data creado
-      res.status(201).json({ message: 'Herramienta agregada con éxito', data });
-    } catch (error) {
-      console.log(error);
-      res.status(500).json({ error: 'Hubo un problema al agregar la herramienta' });
-    }
-  });
 
 // Ruta para agregar un movimiento
 router.post('/herramientas-en-obra', async (req, res) => {
